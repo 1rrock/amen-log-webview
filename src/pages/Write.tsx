@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ConfirmDialog } from '@toss/tds-mobile';
 import { generateResponse } from '../utils/ai';
 import { v4 as uuidv4 } from 'uuid';
 import { saveRecord } from '../utils/storage';
@@ -8,29 +9,32 @@ import { useRewardedAd } from '../hooks/useRewardedAd';
 export default function Write() {
     const navigate = useNavigate();
     const [prayer, setPrayer] = useState('');
-    const { loading: adLoading, showRewardAd } = useRewardedAd();
+    const { showRewardAd, isWaiting: adWaiting } = useRewardedAd();
     const [aiLoading, setAiLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const hasProcessedRef = useRef(false);
 
     const handleNext = async () => {
         if (!prayer.trim() || isSubmitting) return;
+        setIsConfirmOpen(true);
+    };
 
+    const startAdProcess = () => {
+        setIsConfirmOpen(false);
         setIsSubmitting(true);
         hasProcessedRef.current = false;
 
         showRewardAd({
             onRewarded: () => {
-                // 리워드를 성공적으로 획득했을 때만 처리 (광고 시청 완료)
                 if (!hasProcessedRef.current) {
                     hasProcessedRef.current = true;
                     processSubmission();
                 }
             },
             onDismiss: () => {
-                // 광고를 그냥 닫았을 경우 처리
                 if (!hasProcessedRef.current) {
-                    setIsSubmitting(false); // 다시 기도하기 버튼 누를 수 있게 초기화
+                    setIsSubmitting(false);
                 }
             }
         });
@@ -58,6 +62,27 @@ export default function Write() {
 
     return (
         <div className="page-container">
+            <ConfirmDialog
+                open={isConfirmOpen}
+                title={<ConfirmDialog.Title>기도를 전송하시겠습니까?</ConfirmDialog.Title>}
+                description={
+                    <ConfirmDialog.Description>
+                        AI 말씀을 받기 위해 광고 시청이 필요합니다.
+                    </ConfirmDialog.Description>
+                }
+                cancelButton={
+                    <ConfirmDialog.CancelButton onClick={() => setIsConfirmOpen(false)}>
+                        취소
+                    </ConfirmDialog.CancelButton>
+                }
+                confirmButton={
+                    <ConfirmDialog.ConfirmButton onClick={startAdProcess}>
+                        시작하기
+                    </ConfirmDialog.ConfirmButton>
+                }
+                onClose={() => setIsConfirmOpen(false)}
+            />
+
             {/* Top Section */}
             <div className="top-section">
                 <h1 className="top-title">어떤 기도를 드리고 싶나요?</h1>
@@ -89,12 +114,20 @@ export default function Write() {
                 </button>
                 <button
                     className="btn-primary flex-1"
-                    disabled={!prayer.trim() || aiLoading || adLoading || isSubmitting}
+                    disabled={!prayer.trim() || aiLoading || isSubmitting}
                     onClick={handleNext}
                 >
                     {aiLoading ? '준비 중...' : '기도하기'}
                 </button>
             </div>
+            {(isSubmitting || aiLoading || adWaiting) && (
+                <div className="loading-overlay">
+                    <div className="loading-spinner"></div>
+                    <p className="loading-text">
+                        지극한 마음으로 기도를 전하는 중입니다...
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
